@@ -7,6 +7,14 @@ import typing
 import math
 import html
 import csv
+import time
+
+# Headers to avoid being blocked by Wowhead
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+}
 
 
 @dataclass
@@ -23,7 +31,8 @@ class WowheadObject:
         self.gathermate_id = gathermate_id
 
         for object_id in self.ids:
-            result = requests.get(f'https://www.wowhead.com/object={object_id}')
+            time.sleep(0.5)  # Rate limiting to avoid being blocked
+            result = requests.get(f'https://www.wowhead.com/object={object_id}', headers=HEADERS)
             title = html.unescape(re.search(r'<meta property="og:title" content="(.*)">', result.text).group(1))
             data = re.search(r'var g_mapperData = (.*);', result.text)
             zones = re.findall(r'myMapper.update\({\s+zone: (\d+),\s+level: \d+,\s+}\);\s+WH.setSelectedLink\(this, \'mapper\'\);\s+return false;\s+" onmousedown="return false">([^<]+)</a>', result.text, re.M)
