@@ -292,9 +292,9 @@ WOWHEAD_ZONE_SUPPRESSION = [
     # Wrath of the Lich King
     '206', '1196', '4196', '4228', '4265', '4273', '4277', '4416', '4494', '4812', '5786',
     # Cataclysm
-    '6109', '5035',
+    '6109', '5035', '5396', '5511',
     # Mists of Pandaria
-    '5918', '5956', '6052', '6109', '6214',
+    '5918', '5956', '6052', '6109', '6214', '6862',
     # Draenor
     '6967', '7078', '7004',
     # Legion
@@ -326,6 +326,8 @@ WOWHEAD_ZONE_SUPPRESSION = [
     '15781', # Tazavesh Hub
 
     # Midnight
+    '16545', # Collegiate Calamity (Dungeon)
+    '16548', # The Grudge Pit (Delve)
 
 ]
 
@@ -388,7 +390,7 @@ WOWHEAD_ZONE_MAP = {
     '3524': Zone("Azuremyst Isle", "97"),
     '3522': Zone("Blade's Edge Mountains", "105"),
     '3525': Zone("Bloodmyst Isle", "106"),
-    '3430': Zone("Eversong Woods", "94"),
+    '3430': Zone("Eversong Woods (Burning Crusade)", "94"),
     '3433': Zone("Ghostlands", "95"),
     '3483': Zone("Hellfire Peninsula", "100"),
     '4080': Zone("Isle of Quel'Danas", "122"),
@@ -419,11 +421,12 @@ WOWHEAD_ZONE_MAP = {
     '5145': Zone("Abyssal Depths", "204"),
     '5042': Zone("Deepholm", "207"),
     '4714': Zone("Gilneas", "217"),
-    '4755': Zone("Gilneas City", "218"),
+    '4706': Zone("Ruins of Gilneas", "217"),
+    '5351': Zone("Ruins of Gilneas City", "218"),
+    '4755': Zone("Gilneas City", "202"),
     '616' : Zone("Mount Hyjal", "198"),
     '4815': Zone("Kelp'thar Forest", "201"),
     '4737': Zone("Kezan", "194"),
-    # '4706': Zone("Ruins of Gilneas", "217"),
     '5144': Zone("Shimmering Expanse", "205"),
     '4720': Zone("The Lost Isles", "174"),
     '5095': Zone("Tol Barad", "244"),
@@ -446,6 +449,9 @@ WOWHEAD_ZONE_MAP = {
     '5840': Zone("Vale of Eternal Blossoms", "390"),
     '5805': Zone("Valley of the Four Winds", "376"),
     '9105': Zone("Vale of Eternal Blossoms", "1530"),
+    '6170': Zone("Northshire", "425"),
+    '6454': Zone("Deathknell", "465"),
+    '6176': Zone("Coldridge Valley", "427"),
 
     # Draenor
     '6941': Zone("Ashran", "588"),
@@ -456,6 +462,8 @@ WOWHEAD_ZONE_MAP = {
     '6722': Zone("Spires of Arak", "542"),
     '6662': Zone("Talador", "535"),
     '6723': Zone("Tanaan Jungle", "534"),
+    '7332': Zone("Stormshield", "622"),
+    '7333': Zone("Warspear", "624"),
 
     # Legion
     '8899': Zone("Antoran Wastes", "885"),
@@ -469,6 +477,7 @@ WOWHEAD_ZONE_MAP = {
     '7637': Zone("Suramar", "680"),
     '7731': Zone("Thunder Totem", "750"),
     '7558': Zone("Val'sharah", "641"),
+    '7846': Zone("The Dreamgrove", "747"),
 
     # Battle for Azeroth
     '8568' : Zone("Boralus", "1161"),
@@ -491,6 +500,7 @@ WOWHEAD_ZONE_MAP = {
     '11400': Zone("The Maw", "1543"),
     '13570': Zone("Korthia", "1961"),
     '13536': Zone("Zereth Mortis", "1970"),
+    '13983': Zone("Tirisfal Glades", "18"),
 
     # Dragonflight
 
@@ -517,6 +527,8 @@ WOWHEAD_ZONE_MAP = {
     '14771': Zone("Dornogal", "2339"),
     '15347': Zone("Undermine", "2346"),
     '15336': Zone("K'aresh", "2371"),
+    '16505': Zone("Voidscar Cavern", "2477"),
+    '10416': Zone("Siren Isle", "2369"),
 
     # Midnight
     '15968': Zone("Eversong Woods", "2395"),
@@ -524,8 +536,9 @@ WOWHEAD_ZONE_MAP = {
     '16215': Zone("Isle of Quel'Danas", "2424"),
     '15969': Zone("Silvermoon City", "2393"),
     '15458': Zone("Voidstorm", "2405"),
+    '15958': Zone("Masters' Perch", "2444"),
     '15947': Zone("Zul'Aman", "2437"),
-    '16194': Zone("Atal'Aman", "2336"),
+    '16194': Zone("Atal'Aman", "2536"),
 
 }
 
