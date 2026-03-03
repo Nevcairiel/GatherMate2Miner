@@ -31,7 +31,7 @@ class WowheadObject:
         self.gathermate_id = gathermate_id
 
         for object_id in self.ids:
-            time.sleep(0.5)  # Rate limiting to avoid being blocked
+            time.sleep(2)  # Rate limiting to avoid being blocked
             result = requests.get(f'https://www.wowhead.com/object={object_id}', headers=HEADERS)
             title = html.unescape(re.search(r'<meta property="og:title" content="(.*)">', result.text).group(1))
             data = re.search(r'var g_mapperData = (.*);', result.text)
