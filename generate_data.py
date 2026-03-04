@@ -1201,8 +1201,8 @@ if __name__ == '__main__':
         print(Aggregate("Mine", ORES, 15), file=file)
 
     # Fish
-    with open("../GatherMate2_Data/FishData.lua", "w") as file:
-        print(Aggregate("Fish", FISHES, 15), file=file)
+#    with open("../GatherMate2_Data/FishData.lua", "w") as file:
+#        print(Aggregate("Fish", FISHES, 15), file=file)
 
     # Timber
     with open("../GatherMate2_Data/TimberData.lua", "w") as file:
