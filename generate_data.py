@@ -1014,7 +1014,7 @@ TREASURES = [
     #WowheadObject(name="Mossy Footlocker", ids=['179493', '179497', '179495'], gathermate_id='518'),
     #WowheadObject(name="Scarlet Footlocker", ids=['179498'], gathermate_id='519'),
 ]
-
+...
 FISHES = [
     # Vanilla
     WowheadObject(name="Floating Wreckage", ids=['180751'], gathermate_id='101'),
@@ -1175,7 +1175,7 @@ FISHES = [
     WowheadObject(name="Lost Treasures", ids=['570492'], gathermate_id='1143'),
     WowheadObject(name="Viscous Void", ids=['558198'], gathermate_id='1144'),
 ]
-
+...
 TIMBER = [
     WowheadObject(name="Ironwood Lumber", ids=[575032, 576692, 574596, 574913, 584615, 577787, 573459, 578925, 581830, 576199, 576282, 576113, 577999, 581876, 572254, 576400, 584694, 573368, 576622, 573057, 584445, 576717, 573695, 574966, 584475, 578023, 574416, 582143, 574731, 577703, 582149, 577792, 576402, 575031, 574599, 574938, 576448], gathermate_id='704'),
     WowheadObject(name="Olemba Lumber", ids=[572129, 571070, 572094, 571071, 572869, 571213, 572995, 571345, 572785, 572438, 572615], gathermate_id='705'),
