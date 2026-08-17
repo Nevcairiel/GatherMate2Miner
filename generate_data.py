@@ -539,6 +539,7 @@ WOWHEAD_ZONE_MAP = {
     '15958': Zone("Masters' Perch", "2444"),
     '15947': Zone("Zul'Aman", "2437"),
     '16194': Zone("Atal'Aman", "2536"),
+    '16365': Zone("The Coiled Isle", "2512"),
 
 }
 
