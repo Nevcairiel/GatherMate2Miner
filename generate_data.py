@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-import requests
+import atexit
+import os
 import re
 import json
 from dataclasses import dataclass
@@ -9,12 +10,109 @@ import html
 import csv
 import time
 
-# Headers to avoid being blocked by Wowhead
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
-}
+from playwright.sync_api import sync_playwright, Error as PlaywrightError
+
+# Wowhead rejects plain HTTP clients (403 from their firewall), so pages are
+# loaded through a locally installed browser instead. Requires
+# "pip install playwright"; no browser download is needed.
+BROWSER_CHANNEL = os.environ.get('WOWHEAD_BROWSER', 'chrome')  # or 'msedge'
+
+# Fetched pages are kept here so an interrupted or repeated run doesn't hit
+# Wowhead again. Delete the directory to fetch fresh data.
+CACHE_DIR = 'cache'
+
+# How long to wait (seconds) for a person to solve a CAPTCHA before giving up.
+CAPTCHA_TIMEOUT = 1800
+
+_playwright = None
+_browser = None
+_page = None
+
+
+def _close_browser():
+    if _browser is not None:
+        _browser.close()
+    if _playwright is not None:
+        _playwright.stop()
+
+
+def _get_page():
+    global _playwright, _browser, _page
+    if _page is None:
+        _playwright = sync_playwright().start()
+        _browser = _playwright.chromium.launch(channel=BROWSER_CHANNEL, headless=False)
+        _page = _browser.new_page()
+        atexit.register(_close_browser)
+    return _page
+
+
+def _park(page):
+    # Leave the current page so its scripts can't start further navigations
+    # (some object pages redirect themselves after loading).
+    for attempt in range(3):
+        try:
+            page.goto('about:blank')
+            return
+        except PlaywrightError:
+            time.sleep(1)
+
+
+def fetch_object_page(object_id) -> str:
+    cache_file = os.path.join(CACHE_DIR, f'object-{object_id}.html')
+    if os.path.exists(cache_file):
+        with open(cache_file, encoding='utf-8') as file:
+            return file.read()
+
+    time.sleep(2)  # Rate limiting to avoid being blocked
+    page = _get_page()
+    url = f'https://www.wowhead.com/object={object_id}'
+    text = None
+    status = None
+    last_error = None
+    for attempt in range(5):
+        # Read the source as soon as the response arrives; some pages navigate
+        # again once their scripts run, after which the source is unavailable.
+        try:
+            response = page.goto(url, wait_until='commit')
+        except PlaywrightError as error:
+            # Usually a late navigation by the previous page interrupting this
+            # one; retry.
+            last_error = error
+            _park(page)
+            time.sleep(2)
+            continue
+        status = response.status if response else None
+        if status == 202:
+            # Interstitial browser check (usually only on the first request). The
+            # browser completes it and reloads on its own; wait for the real page,
+            # then request it again to get the unmodified source.
+            page.wait_for_selector('meta[property="og:title"]', state='attached', timeout=60000)
+            continue
+        if status == 405:
+            # Wowhead is asking for a CAPTCHA. That needs a person: wait for it
+            # to be solved in the browser window, then carry on.
+            print(f'Wowhead is showing a CAPTCHA (object {object_id}). Please solve it in the browser window...', flush=True)
+            page.wait_for_selector('meta[property="og:title"]', state='attached', timeout=CAPTCHA_TIMEOUT * 1000)
+            print('CAPTCHA solved, continuing.', flush=True)
+            continue
+        if status != 200:
+            break
+        try:
+            text = response.text()
+            break
+        except PlaywrightError as error:
+            # The page navigated again before the source could be read; retry.
+            last_error = error
+            _park(page)
+            time.sleep(2)
+    _park(page)
+    if text is None:
+        raise RuntimeError(f'Wowhead returned {status} for object {object_id}' + (f' (last browser error: {last_error})' if last_error else ''))
+
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    with open(cache_file, 'w', encoding='utf-8') as file:
+        file.write(text)
+    return text
 
 
 @dataclass
@@ -31,11 +129,10 @@ class WowheadObject:
         self.gathermate_id = gathermate_id
 
         for object_id in self.ids:
-            time.sleep(2)  # Rate limiting to avoid being blocked
-            result = requests.get(f'https://www.wowhead.com/object={object_id}', headers=HEADERS)
-            title = html.unescape(re.search(r'<meta property="og:title" content="(.*)">', result.text).group(1))
-            data = re.search(r'var g_mapperData = (.*);', result.text)
-            zones = re.findall(r'myMapper.update\({\s+zone: (\d+),\s+level: \d+,\s+}\);\s+WH.setSelectedLink\(this, \'mapper\'\);\s+return false;\s+" onmousedown="return false">([^<]+)</a>', result.text, re.M)
+            text = fetch_object_page(object_id)
+            title = html.unescape(re.search(r'<meta property="og:title" content="(.*)">', text).group(1))
+            data = re.search(r'var g_mapperData = (.*);', text)
+            zones = re.findall(r'myMapper.update\({\s+zone: (\d+),\s+level: \d+,\s+}\);\s+WH.setSelectedLink\(this, \'mapper\'\);\s+return false;\s+" onmousedown="return false">([^<]+)</a>', text, re.M)
             zonemap = dict(zones)
             try:
                 data_parsed = json.loads(data.group(1))
@@ -328,6 +425,17 @@ WOWHEAD_ZONE_SUPPRESSION = [
     # Midnight
     '16545', # Collegiate Calamity (Dungeon)
     '16548', # The Grudge Pit (Delve)
+    '16534', # Lair of Predaxas
+    '16542', # Parhelion Plaza
+    '16549', # Shadowguard Point
+    '16556', # Atal'Aman
+    '16557', # Twilight Crypts
+    '16592', # Sunkiller Sanctum
+    '16594', # The Shadow Enclave
+    '16595', # The Gulf of Memory
+    '16642', # The Darkway
+    '16980', # Gnarldor Isle
+    '16981', # The Ring of Glory
 
 ]
 
@@ -387,6 +495,7 @@ WOWHEAD_ZONE_MAP = {
     '11' : Zone("Wetlands", "56"),
 
     # Burning Crusade
+    '6456': Zone("Ammen Vale", "468"),
     '3524': Zone("Azuremyst Isle", "97"),
     '3522': Zone("Blade's Edge Mountains", "105"),
     '3525': Zone("Bloodmyst Isle", "106"),
@@ -764,6 +873,7 @@ HERBS = [
     WowheadObject(name="Transplanted Lush Argentleaf", ids=['612111'], gathermate_id='1481'),
     WowheadObject(name="Voidbound Argentleaf", ids=['516982'], gathermate_id='1481'),
     WowheadObject(name="Wild Argentleaf", ids=['516971'], gathermate_id='1481'),
+    WowheadObject(name="Cursed Argentleaf", ids=['660380'], gathermate_id='1481'),
 
     WowheadObject(name="Azeroot", ids=['516935'], gathermate_id='1482'),
     WowheadObject(name="Lush Azeroot", ids=['516986'], gathermate_id='1482'),
@@ -773,6 +883,7 @@ HERBS = [
     WowheadObject(name="Transplanted Lush Azeroot", ids=['612114'], gathermate_id='1482'),
     WowheadObject(name="Voidbound Azeroot", ids=['516981'], gathermate_id='1482'),
     WowheadObject(name="Wild Azeroot", ids=['516970'], gathermate_id='1482'),
+    WowheadObject(name="Cursed Azeroot", ids=['660381'], gathermate_id='1482'),
 
     WowheadObject(name="Mana Lily", ids=['516937'], gathermate_id='1483'),
     WowheadObject(name="Lush Mana Lily", ids=['516984'], gathermate_id='1483'),
@@ -782,6 +893,7 @@ HERBS = [
     WowheadObject(name="Transplanted Lush Mana Lily", ids=['612113'], gathermate_id='1483'),
     WowheadObject(name="Voidbound Mana Lily", ids=['516983'], gathermate_id='1483'),
     WowheadObject(name="Wild Mana Lily", ids=['516972'], gathermate_id='1483'),
+    WowheadObject(name="Cursed Mana Lily", ids=['660385'], gathermate_id='1483'),
 
     WowheadObject(name="Sanguithorn", ids=['516934'], gathermate_id='1484'),
     WowheadObject(name="Lush Sanguithorn", ids=['516987'], gathermate_id='1484'),
@@ -791,6 +903,7 @@ HERBS = [
     WowheadObject(name="Transplanted Lush Sanguithorn", ids=['612115'], gathermate_id='1484'),
     WowheadObject(name="Voidbound Sanguithorn", ids=['516980'], gathermate_id='1484'),
     WowheadObject(name="Wild Sanguithorn", ids=['516969'], gathermate_id='1484'),
+    WowheadObject(name="Cursed Sanguithorn", ids=['660387'], gathermate_id='1484'),
 
     WowheadObject(name="Tranquility Bloom", ids=['516932'], gathermate_id='1485'),
     WowheadObject(name="Lush Tranquility Bloom", ids=['516988'], gathermate_id='1485'),
@@ -800,6 +913,8 @@ HERBS = [
     WowheadObject(name="Transplanted Lush Tranquility Bloom", ids=['612112'], gathermate_id='1485'),
     WowheadObject(name="Voidbound Tranquility Bloom", ids=['516979'], gathermate_id='1485'),
     WowheadObject(name="Wild Tranquility Bloom", ids=['516968'], gathermate_id='1485'),
+    WowheadObject(name="Cursed Tranquility Bloom", ids=['660388'], gathermate_id='1485'),
+    WowheadObject(name="Envenomated Tranquility Bloom", ids=['668263'], gathermate_id='1485'),
 ]
 
 ORES = [
@@ -975,6 +1090,7 @@ ORES = [
     WowheadObject(name="Primal Brilliant Silver", ids=['523299'], gathermate_id='1245'),
     WowheadObject(name="Voidbound Brilliant Silver", ids=['523301'], gathermate_id='1245'),
     WowheadObject(name="Wild Brilliant Silver", ids=['523300'], gathermate_id='1245'),
+    WowheadObject(name="Cursed Brilliant Silver", ids=['660374'], gathermate_id='1245'),
     WowheadObject(name="Brilliant Silver Seam", ids=['523298'], gathermate_id='1246'),
 
     WowheadObject(name="Refulgent Copper", ids=['523281'], gathermate_id='1247'),
@@ -983,6 +1099,8 @@ ORES = [
     WowheadObject(name="Primal Refulgent Copper", ids=['523285'], gathermate_id='1247'),
     WowheadObject(name="Voidbound Refulgent Copper", ids=['523287'], gathermate_id='1247'),
     WowheadObject(name="Wild Refulgent Copper", ids=['523286'], gathermate_id='1247'),
+    WowheadObject(name="Cursed Refulgent Copper", ids=['656001'], gathermate_id='1247'),
+    WowheadObject(name="Envenomated Copper", ids=['652366'], gathermate_id='1247'),
     WowheadObject(name="Refulgent Copper Seam", ids=['523283'], gathermate_id='1248'),
 
     WowheadObject(name="Umbral Tin", ids=['523288'], gathermate_id='1249'),
@@ -991,6 +1109,7 @@ ORES = [
     WowheadObject(name="Primal Umbral Tin", ids=['523291'], gathermate_id='1249'),
     WowheadObject(name="Voidbound Umbral Tin", ids=['523293'], gathermate_id='1249'),
     WowheadObject(name="Wild Umbral Tin", ids=['523292'], gathermate_id='1249'),
+    WowheadObject(name="Cursed Umbral Tin", ids=['660376'], gathermate_id='1249'),
     WowheadObject(name="Umbral Tin Seam", ids=['523290'], gathermate_id='1250'),
 ]
 
@@ -1186,19 +1305,19 @@ TIMBER = [
     WowheadObject(name="Shadowmoon Lumber", ids=[628951, 628952, 628949, 628955, 628954, 628956, 628950, 628953], gathermate_id='709'),
     WowheadObject(name="Fel-Touched Lumber", ids=[559409, 558389, 562159, 560358, 560826, 558361, 562439, 560822], gathermate_id='710'),
     WowheadObject(name="Darkpine Lumber", ids=[556704, 556425, 555545, 558338, 556387, 556076, 557988], gathermate_id='711'),
-    WowheadObject(name="Arden Lumber", ids=[554661, 553616, 553646, 553804], gathermate_id='712'),
+    WowheadObject(name="Arden Lumber", ids=[554661, 553616, 553646, 553804, 655022], gathermate_id='712'),
     WowheadObject(name="Dragonpine Lumber", ids=[546955, 547487, 551833, 547258, 549325, 547740, 555364], gathermate_id='713'),
     WowheadObject(name="Dornic Fir Lumber", ids=[543723, 546738, 546928, 546737, 544781], gathermate_id='714'),
-    WowheadObject(name="Thalassian Lumber", ids=[618517, 618519, 618518, 618520], gathermate_id='715'), # Midnight
+    WowheadObject(name="Thalassian Lumber", ids=[618517, 618519, 618518, 618520, 672536], gathermate_id='715'), # Midnight
 ]
 
 if __name__ == '__main__':
     # Herbs
-    with open("../GatherMate2_Data/HerbalismData.lua", "w") as file:
+    with open("../GatherMate2_Data/retail/HerbalismData.lua", "w") as file:
         print(Aggregate("Herb", HERBS, 15), file=file)
 
     # Ores
-    with open("../GatherMate2_Data/MiningData.lua", "w") as file:
+    with open("../GatherMate2_Data/retail/MiningData.lua", "w") as file:
         print(Aggregate("Mine", ORES, 15), file=file)
 
     # Fish
@@ -1206,7 +1325,7 @@ if __name__ == '__main__':
 #        print(Aggregate("Fish", FISHES, 15), file=file)
 
     # Timber
-    with open("../GatherMate2_Data/TimberData.lua", "w") as file:
+    with open("../GatherMate2_Data/retail/TimberData.lua", "w") as file:
         print(Aggregate("Logging", TIMBER, 15), file=file)
 
     # Treasures
